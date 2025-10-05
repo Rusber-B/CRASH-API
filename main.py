@@ -21,12 +21,10 @@ app = FastAPI(
 # Importar los routers desde los archivos de endpoints
 from endpoints.PreviewAsteroid import router as preview_router
 from endpoints.DetailAsteroid import router as detail_router
-from endpoints.PreviewAsteroidPosition import router as position_router
 
 # Incluir todos los routers en la app principal
 app.include_router(preview_router)
 app.include_router(detail_router)
-app.include_router(position_router)
 
 # Endpoint raíz unificado
 @app.get("/")
