@@ -44,10 +44,11 @@ def root():
         ]
     }
 
-# Obtener el puerto y convertirlo a entero, con valor por defecto
+# Obtener el puerto de la variable de entorno PORT, con valor por defecto 10000 (como recomienda Render)
 PORT = int(os.getenv("PORT", 10000))
 
 # Ejecución del servidor
 if __name__ == "__main__":
     import uvicorn
+    # Importante: Bind a 0.0.0.0 como requiere Render
     uvicorn.run(app, host="0.0.0.0", port=PORT)
