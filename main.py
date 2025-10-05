@@ -60,6 +60,63 @@ def root():
             {"descripcion": "Consultar posición y elementos orbitales", "url": "/position/Ceres"}
         ]
     }
+    
+    # main.py (agregar estas rutas)
+import os
+import json
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import Response
+from dotenv import load_dotenv
+from redis_cache import cache  # Importar el cache
+
+# ... (tu código existente)
+
+# Endpoints de gestión del cache
+@app.get("/cache/health")
+async def cache_health():
+    """Verifica el estado del cache Redis"""
+    is_healthy = cache.health_check()
+    return {
+        "redis_connected": is_healthy,
+        "status": "healthy" if is_healthy else "unhealthy"
+    }
+
+@app.get("/cache/keys")
+async def get_cache_keys(pattern: str = "*"):
+    """Obtiene todas las keys del cache que coincidan con el patrón"""
+    try:
+        keys = cache.redis_client.keys(pattern)
+        return {"keys": keys, "count": len(keys)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al obtener keys: {str(e)}")
+
+@app.delete("/cache/clear")
+async def clear_cache(pattern: str = "*"):
+    """Limpia el cache según el patrón"""
+    try:
+        success = cache.clear_pattern(pattern)
+        if success:
+            return {"message": f"Cache limpiado para patrón: {pattern}"}
+        else:
+            raise HTTPException(status_code=500, detail="Error al limpiar el cache")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al limpiar cache: {str(e)}")
+
+@app.get("/cache/info")
+async def get_cache_info():
+    """Obtiene información del cache Redis"""
+    try:
+        info = cache.redis_client.info()
+        return {
+            "connected_clients": info.get('connected_clients'),
+            "used_memory_human": info.get('used_memory_human'),
+            "used_memory_peak_human": info.get('used_memory_peak_human'),
+            "keyspace_hits": info.get('keyspace_hits'),
+            "keyspace_misses": info.get('keyspace_misses'),
+            "hit_rate": info.get('keyspace_hits', 0) / max((info.get('keyspace_hits', 0) + info.get('keyspace_misses', 0)), 1)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al obtener info del cache: {str(e)}")
 
 # ELIMINA esta parte si vas a usar uvicorn directamente:
 # if __name__ == "__main__":

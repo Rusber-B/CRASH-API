@@ -1,7 +1,9 @@
+# endpoints/DetailAsteroid.py
 import requests
 import os
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from dotenv import load_dotenv
+from redis_cache import cache  # Importar el cache
 
 load_dotenv()
 
@@ -10,14 +12,25 @@ router = APIRouter(prefix="/asteroidDetails", tags=["Asteroid Details"])
 API_NEO_SEARCH_URL = "https://api.nasa.gov/neo/rest/v1/neo/"
 NASA_API_KEY = os.getenv("apiKey")
 
+# Tiempo de expiración en segundos (1 hora)
+CACHE_EXPIRE = 3600
+
+def get_cache_key(asteroid_id: str) -> str:
+    """Genera la key única para el cache"""
+    return f"asteroid_details:{asteroid_id}"
+
 @router.get("/{asteroid_id}")
 async def get_asteroid_details(asteroid_id: str):
     """
     Busca un asteroide por su ID y devuelve información general simplificada.
-    Perfecto para personas que no son expertas en astronomía.
-
-    - **asteroid_id**: El ID numérico del asteroide (ej: 3712619)
     """
+    # Verificar cache primero
+    cache_key = get_cache_key(asteroid_id)
+    cached_data = cache.get(cache_key)
+    
+    if cached_data:
+        return {**cached_data, "source": "cache"}
+
     try:
         url = f"{API_NEO_SEARCH_URL}{asteroid_id}"
         params = {"api_key": NASA_API_KEY}
@@ -27,19 +40,17 @@ async def get_asteroid_details(asteroid_id: str):
         
         asteroide = response.json()
 
-        # Extraer datos básicos
+        # Extraer datos básicos (tu código existente)
         diametros_m = asteroide.get("estimated_diameter", {}).get("meters", {})
         diametro_min_m = diametros_m.get("estimated_diameter_min", 0)
         diametro_max_m = diametros_m.get("estimated_diameter_max", 0)
         
-        # Calcular el diámetro promedio
         diametro_promedio_m = (diametro_min_m + diametro_max_m) / 2 if diametro_min_m > 0 and diametro_max_m > 0 else 0
 
         # Procesar datos de acercamiento más reciente
         close_approaches = asteroide.get("close_approach_data", [])
         ultimo_acercamiento = {}
         if close_approaches:
-            # Tomar el acercamiento más reciente
             mas_reciente = close_approaches[0]
             ultimo_acercamiento = {
                 "fecha": mas_reciente.get("close_approach_date"),
@@ -48,7 +59,7 @@ async def get_asteroid_details(asteroid_id: str):
                 "cuerpo_orbital": mas_reciente.get("orbiting_body")
             }
 
-        return {
+        response_data = {
             "informacion_basica": {
                 "id": asteroide.get("id"),
                 "nombre": asteroide.get("name"),
@@ -68,6 +79,11 @@ async def get_asteroid_details(asteroid_id: str):
             }
         }
 
+        # Guardar en cache
+        cache.set(cache_key, response_data, CACHE_EXPIRE)
+        
+        return {**response_data, "source": "nasa_api"}
+
     except requests.exceptions.HTTPError as http_err:
         if http_err.response.status_code == 404:
             raise HTTPException(
@@ -83,3 +99,13 @@ async def get_asteroid_details(asteroid_id: str):
             status_code=503, 
             detail=f"No se pudo conectar con la NASA. Intenta nuevamente más tarde."
         )
+
+# Endpoint para limpiar cache específico
+@router.delete("/cache/{asteroid_id}")
+async def clear_asteroid_cache(asteroid_id: str):
+    """Limpia el cache de un asteroide específico"""
+    cache_key = get_cache_key(asteroid_id)
+    if cache.delete(cache_key):
+        return {"message": f"Cache del asteroide {asteroid_id} limpiado correctamente"}
+    else:
+        raise HTTPException(status_code=500, detail="Error al limpiar el cache")

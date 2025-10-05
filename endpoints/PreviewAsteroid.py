@@ -1,10 +1,14 @@
+# endpoints/PreviewAsteroid.py
 import requests
 import os
 import math
+import json  # <-- Añadir esta importación
 from datetime import date
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import Response  # <-- Añadir esta importación
+from fastapi.responses import Response
+from fastapi.encoders import jsonable_encoder  # <-- Añadir esta importación
 from dotenv import load_dotenv
+from redis_cache import cache
 
 load_dotenv()
 
@@ -14,6 +18,14 @@ API_NEO_FEED_URL = "https://api.nasa.gov/neo/rest/v1/feed"
 API_SBDB_URL = "https://ssd-api.jpl.nasa.gov/sbdb.api"
 NASA_API_KEY = os.getenv("apiKey")
 
+# Tiempo de expiración en segundos (30 minutos)
+CACHE_EXPIRE = 1800
+
+def get_cache_key(fecha_consulta: str) -> str:
+    """Genera la key única para el cache"""
+    return f"preview_asteroid:{fecha_consulta}"
+
+# Mover todas las funciones auxiliares AQUÍ, antes del endpoint
 def clean_asteroid_name(name: str) -> str:
     """Limpia el nombre del asteroide removiendo paréntesis"""
     return name.replace("(", "").replace(")", "")
@@ -32,17 +44,6 @@ def get_sbdb_data(asteroid_name: str):
 def keplerian_to_cartesian(a, e, i, omega, Omega, nu):
     """
     Convierte elementos keplerianos a coordenadas cartesianas (x, y, z)
-    
-    Parámetros:
-    a: semieje mayor (AU)
-    e: excentricidad
-    i: inclinación (grados)
-    omega: argumento del periastro (grados)
-    Omega: longitud del nodo ascendente (grados)
-    nu: anomalía verdadera (grados)
-    
-    Retorna:
-    r, x, y, z (en AU)
     """
     # Convertir grados a radianes
     i_rad = math.radians(i)
@@ -77,7 +78,7 @@ def extract_sbdb_info(sbdb_data):
         return {
             "inclination": 0.0, 
             "earth_distance_au": 0.0,
-            "coordinates": {"r": 0.0, "x": 0.0, "y": 0.0, "z": 0.0}
+            "coordinates": {"r_au": 0.0, "x_au": 0.0, "y_au": 0.0, "z_au": 0.0}
         }
     
     try:
@@ -100,8 +101,6 @@ def extract_sbdb_info(sbdb_data):
         
         required_elements = ["a", "e", "i", "w", "om", "ma"]
         if all(elem in elements_dict for elem in required_elements):
-            # Usar anomalía media (ma) como aproximación de anomalía verdadera (nu)
-            # En una implementación más precisa, se debería convertir ma a nu
             a = elements_dict["a"]  # semieje mayor (AU)
             e = elements_dict["e"]  # excentricidad
             i = elements_dict["i"]  # inclinación (grados)
@@ -131,12 +130,9 @@ def extract_sbdb_info(sbdb_data):
             "coordinates": {"r_au": 0.0, "x_au": 0.0, "y_au": 0.0, "z_au": 0.0}
         }
 
-# Endpoint HEAD para CORS (sin restricciones)
+# Endpoints HEAD y OPTIONS (sin cambios)
 @router.head("/{fecha_consulta}")
 async def preview_asteroid_head(fecha_consulta: str):
-    """
-    Endpoint HEAD para CORS - SIN RESTRICCIONES
-    """
     return Response(
         status_code=200,
         headers={
@@ -148,12 +144,8 @@ async def preview_asteroid_head(fecha_consulta: str):
         }
     )
 
-# Endpoint OPTIONS para CORS (sin restricciones)
 @router.options("/{fecha_consulta}")
 async def preview_asteroid_options(fecha_consulta: str):
-    """
-    Endpoint OPTIONS para CORS - SIN RESTRICCIONES
-    """
     return Response(
         status_code=200,
         headers={
@@ -169,10 +161,28 @@ async def preview_asteroid_options(fecha_consulta: str):
 async def previewAsteroid(fecha_consulta: date):
     """
     Este endpoint recibe una fecha y devuelve información detallada de asteroides.
-    
-    - **fecha_consulta**: La fecha para la búsqueda en formato **YYYY-MM-DD**.
     """
     fecha_str = fecha_consulta.strftime("%Y-%m-%d")
+    
+    # Verificar cache primero
+    cache_key = get_cache_key(fecha_str)
+    cached_data = cache.get(cache_key)
+    
+    if cached_data:
+        # Agregar header de cache y retornar
+        response_data = {**cached_data, "source": "cache"}
+        return Response(
+            content=json.dumps(jsonable_encoder(response_data)),
+            media_type="application/json",
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "*",
+                "Access-Control-Allow-Headers": "*",
+                "Access-Control-Allow-Credentials": "true",
+                "X-Cache": "HIT"
+            }
+        )
+
     params = {"start_date": fecha_str, "end_date": fecha_str, "api_key": NASA_API_KEY}
 
     try:
@@ -183,14 +193,24 @@ async def previewAsteroid(fecha_consulta: date):
         asteroides_del_dia = data.get("near_earth_objects", {}).get(fecha_str, [])
 
         if not asteroides_del_dia:
-            # Retornar con headers CORS incluso cuando no hay datos
+            response_data = {
+                "fecha_consultada": fecha_str, 
+                "cantidad": 0, 
+                "asteroides": [],
+                "source": "nasa_api"
+            }
+            
+            # Cachear respuesta vacía también (por 10 minutos)
+            cache.set(cache_key, response_data, 600)
+            
             return Response(
-                content='{"fecha_consultada": "' + fecha_str + '", "cantidad": 0, "asteroides": []}',
+                content=json.dumps(jsonable_encoder(response_data)),
                 media_type="application/json",
                 headers={
                     "Access-Control-Allow-Origin": "*",
                     "Access-Control-Allow-Methods": "*",
-                    "Access-Control-Allow-Headers": "*"
+                    "Access-Control-Allow-Headers": "*",
+                    "X-Cache": "MISS"
                 }
             )
 
@@ -202,11 +222,9 @@ async def previewAsteroid(fecha_consulta: date):
             diametro_max = diametros_km.get("estimated_diameter_max")
             
             if nombre and diametro_min is not None and diametro_max is not None:
-                # Diámetro promedio en metros
                 diametro_promedio_km = (diametro_min + diametro_max) / 2
                 diametro_promedio_m = diametro_promedio_km * 1000
                 
-                # Velocidad relativa (km/s)
                 approach_data = asteroide.get("close_approach_data", [])
                 velocidad_km_s = 0.0
                 if approach_data:
@@ -214,10 +232,9 @@ async def previewAsteroid(fecha_consulta: date):
                     velocidad_km_s = float(relative_velocity.get("kilometers_per_second", 0))
                 
                 # Obtener datos adicionales de JPL y calcular coordenadas
-                sbdb_data = get_sbdb_data(nombre)
-                sbdb_info = extract_sbdb_info(sbdb_data)
+                sbdb_data = get_sbdb_data(nombre)  # <-- Ahora está definida
+                sbdb_info = extract_sbdb_info(sbdb_data)  # <-- Ahora está definida
                 
-                # Convertir distancia de AU a metros (1 AU = 149,597,870,700 metros)
                 earth_distance_m = sbdb_info["earth_distance_au"] * 149597870700
                 
                 resultados_formateados.append({
@@ -230,15 +247,15 @@ async def previewAsteroid(fecha_consulta: date):
                     "coordenadas": sbdb_info["coordinates"]
                 })
         
-        # Crear respuesta con headers CORS
-        from fastapi.encoders import jsonable_encoder
-        import json
-        
         response_data = {
             "fecha_consultada": fecha_str,
             "cantidad": len(resultados_formateados),
-            "asteroides": resultados_formateados
+            "asteroides": resultados_formateados,
+            "source": "nasa_api"
         }
+        
+        # Guardar en cache
+        cache.set(cache_key, response_data, CACHE_EXPIRE)
         
         return Response(
             content=json.dumps(jsonable_encoder(response_data)),
@@ -247,7 +264,8 @@ async def previewAsteroid(fecha_consulta: date):
                 "Access-Control-Allow-Origin": "*",
                 "Access-Control-Allow-Methods": "*",
                 "Access-Control-Allow-Headers": "*",
-                "Access-Control-Allow-Credentials": "true"
+                "Access-Control-Allow-Credentials": "true",
+                "X-Cache": "MISS"
             }
         )
         
@@ -255,29 +273,27 @@ async def previewAsteroid(fecha_consulta: date):
         raise HTTPException(
             status_code=http_err.response.status_code, 
             detail=f"Error HTTP del API de la NASA: {http_err}",
-            headers={
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "*",
-                "Access-Control-Allow-Headers": "*"
-            }
+            headers={"Access-Control-Allow-Origin": "*"}
         )
     except requests.exceptions.RequestException as req_err:
         raise HTTPException(
             status_code=503, 
             detail=f"Error de conexión con el API de la NASA: {req_err}",
-            headers={
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "*",
-                "Access-Control-Allow-Headers": "*"
-            }
+            headers={"Access-Control-Allow-Origin": "*"}
         )
     except Exception as e:
         raise HTTPException(
             status_code=500, 
             detail=f"Error interno del servidor: {str(e)}",
-            headers={
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "*",
-                "Access-Control-Allow-Headers": "*"
-            }
+            headers={"Access-Control-Allow-Origin": "*"}
         )
+
+# Endpoint para limpiar cache de preview
+@router.delete("/cache/{fecha_consulta}")
+async def clear_preview_cache(fecha_consulta: str):
+    """Limpia el cache de una fecha específica"""
+    cache_key = get_cache_key(fecha_consulta)
+    if cache.delete(cache_key):
+        return {"message": f"Cache de la fecha {fecha_consulta} limpiado correctamente"}
+    else:
+        raise HTTPException(status_code=500, detail="Error al limpiar el cache")
