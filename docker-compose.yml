@@ -1,13 +1,11 @@
-# docker-compose.yml
-version: '3.8'
+# render.yaml
 services:
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    command: redis-server --appendonly yes
-
-volumes:
-  redis_data:
+  - type: web
+    name: fastapi-asteroids
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
