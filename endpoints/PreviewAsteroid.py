@@ -3,6 +3,7 @@ import os
 import math
 from datetime import date
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import Response  # <-- Añadir esta importación
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -130,6 +131,40 @@ def extract_sbdb_info(sbdb_data):
             "coordinates": {"r_au": 0.0, "x_au": 0.0, "y_au": 0.0, "z_au": 0.0}
         }
 
+# Endpoint HEAD para CORS (sin restricciones)
+@router.head("/{fecha_consulta}")
+async def preview_asteroid_head(fecha_consulta: str):
+    """
+    Endpoint HEAD para CORS - SIN RESTRICCIONES
+    """
+    return Response(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Max-Age": "86400"
+        }
+    )
+
+# Endpoint OPTIONS para CORS (sin restricciones)
+@router.options("/{fecha_consulta}")
+async def preview_asteroid_options(fecha_consulta: str):
+    """
+    Endpoint OPTIONS para CORS - SIN RESTRICCIONES
+    """
+    return Response(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Max-Age": "86400"
+        }
+    )
+
 @router.get("/{fecha_consulta}")
 async def previewAsteroid(fecha_consulta: date):
     """
@@ -148,7 +183,16 @@ async def previewAsteroid(fecha_consulta: date):
         asteroides_del_dia = data.get("near_earth_objects", {}).get(fecha_str, [])
 
         if not asteroides_del_dia:
-            return {"fecha_consultada": fecha_str, "cantidad": 0, "asteroides": []}
+            # Retornar con headers CORS incluso cuando no hay datos
+            return Response(
+                content='{"fecha_consultada": "' + fecha_str + '", "cantidad": 0, "asteroides": []}',
+                media_type="application/json",
+                headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "*",
+                    "Access-Control-Allow-Headers": "*"
+                }
+            )
 
         resultados_formateados = []
         for asteroide in asteroides_del_dia:
@@ -186,24 +230,54 @@ async def previewAsteroid(fecha_consulta: date):
                     "coordenadas": sbdb_info["coordinates"]
                 })
         
-        return {
+        # Crear respuesta con headers CORS
+        from fastapi.encoders import jsonable_encoder
+        import json
+        
+        response_data = {
             "fecha_consultada": fecha_str,
             "cantidad": len(resultados_formateados),
             "asteroides": resultados_formateados
         }
         
+        return Response(
+            content=json.dumps(jsonable_encoder(response_data)),
+            media_type="application/json",
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "*",
+                "Access-Control-Allow-Headers": "*",
+                "Access-Control-Allow-Credentials": "true"
+            }
+        )
+        
     except requests.exceptions.HTTPError as http_err:
         raise HTTPException(
             status_code=http_err.response.status_code, 
-            detail=f"Error HTTP del API de la NASA: {http_err}"
+            detail=f"Error HTTP del API de la NASA: {http_err}",
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "*",
+                "Access-Control-Allow-Headers": "*"
+            }
         )
     except requests.exceptions.RequestException as req_err:
         raise HTTPException(
             status_code=503, 
-            detail=f"Error de conexión con el API de la NASA: {req_err}"
+            detail=f"Error de conexión con el API de la NASA: {req_err}",
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "*",
+                "Access-Control-Allow-Headers": "*"
+            }
         )
     except Exception as e:
         raise HTTPException(
             status_code=500, 
-            detail=f"Error interno del servidor: {str(e)}"
+            detail=f"Error interno del servidor: {str(e)}",
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "*",
+                "Access-Control-Allow-Headers": "*"
+            }
         )
