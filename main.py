@@ -1,5 +1,6 @@
 import os
 from fastapi import FastAPI
+from fastapi.responses import Response  # <-- Añadir esta importación
 from dotenv import load_dotenv
 
 # Carga las variables de entorno desde el archivo .env
@@ -26,7 +27,23 @@ from endpoints.DetailAsteroid import router as detail_router
 app.include_router(preview_router)
 app.include_router(detail_router)
 
-# Endpoint raíz unificado
+# Endpoint HEAD para la ruta raíz (CORS)
+@app.head("/")
+def root_head():
+    """
+    Endpoint HEAD para CORS preflight requests en la ruta raíz.
+    """
+    return Response(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, HEAD",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
+            "Access-Control-Max-Age": "86400"
+        }
+    )
+
+# Endpoint raíz unificado (GET)
 @app.get("/")
 def root():
     return {
