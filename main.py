@@ -44,7 +44,8 @@ def root():
         ]
     }
 
-PORT = os.getenv("PORT")
+# Obtener el puerto y convertirlo a entero, con valor por defecto
+PORT = int(os.getenv("PORT", 10000))
 
 # Ejecución del servidor
 if __name__ == "__main__":
