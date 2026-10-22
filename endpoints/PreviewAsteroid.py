@@ -1,22 +1,20 @@
 # endpoints/PreviewAsteroid.py
-import requests
-import os
+import json
 import math
-import json  # <-- Añadir esta importación
 from datetime import date
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import Response
-from fastapi.encoders import jsonable_encoder  # <-- Añadir esta importación
-from dotenv import load_dotenv
-from redis_cache import cache
 
-load_dotenv()
+import requests
+from fastapi import APIRouter, HTTPException
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import Response
+
+from config.settings import NASA_API_KEY
+from redis_cache import cache
 
 router = APIRouter(prefix="/previewAsteroid", tags=["Preview Asteroid"])
 
 API_NEO_FEED_URL = "https://api.nasa.gov/neo/rest/v1/feed"
 API_SBDB_URL = "https://ssd-api.jpl.nasa.gov/sbdb.api"
-NASA_API_KEY = os.getenv("apiKey")
 
 # Tiempo de expiración en segundos (30 minutos)
 CACHE_EXPIRE = 1800

@@ -1,16 +1,13 @@
 # endpoints/DetailAsteroid.py
 import requests
-import os
-from fastapi import APIRouter, HTTPException, Depends
-from dotenv import load_dotenv
-from redis_cache import cache  # Importar el cache
+from fastapi import APIRouter, Depends, HTTPException
 
-load_dotenv()
+from config.settings import NASA_API_KEY
+from redis_cache import cache
 
 router = APIRouter(prefix="/asteroidDetails", tags=["Asteroid Details"])
 
 API_NEO_SEARCH_URL = "https://api.nasa.gov/neo/rest/v1/neo/"
-NASA_API_KEY = os.getenv("apiKey")
 
 # Tiempo de expiración en segundos (1 hora)
 CACHE_EXPIRE = 3600
