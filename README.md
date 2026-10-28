@@ -41,7 +41,7 @@ La documentación interactiva queda disponible en http://127.0.0.1:8000/docs.
 | --- | --- | --- |
 | `NASA_API_KEY` | Sí | API key de NASA. |
 | `PORT` | No | Puerto para ejecutar `main.py` directamente. Por defecto `8000`. |
-| `CORS_ORIGINS` | No | Orígenes permitidos separados por coma. Por defecto `https://crashnasa.vercel.app`. |
+| `CORS_ORIGINS` | No | Orígenes permitidos separados por coma, sin barra final. Por defecto `https://crashnasa.vercel.app`. |
 | `REDIS_URL` | No | URL completa de Redis, por ejemplo `redis://usuario:clave@host:6379/0`. |
 | `REDIS_HOST` | No | Host de Redis si no se usa `REDIS_URL`. Por defecto `localhost`. |
 | `REDIS_PORT` | No | Puerto de Redis. Por defecto `6379`. |
@@ -49,7 +49,7 @@ La documentación interactiva queda disponible en http://127.0.0.1:8000/docs.
 | `REDIS_PASSWORD` | No | Contraseña de Redis, si aplica. |
 | `CACHE_ADMIN_TOKEN` | No | Token para endpoints administrativos de caché. Si está vacío, esos endpoints responden 404. |
 
-Si no se configura Redis, la aplicación usa caché en memoria y sigue funcionando.
+Si no se configura Redis, la aplicación usa caché en memoria y sigue funcionando. En Vercel el caché en memoria no persiste entre invocaciones, por lo que se recomienda configurar `REDIS_URL` (por ejemplo, Upstash Redis).
 
 ## Endpoints
 
@@ -78,9 +78,27 @@ Los endpoints administrativos requieren la cabecera:
 X-Admin-Token: <CACHE_ADMIN_TOKEN>
 ```
 
-## Despliegue en Render
+## Despliegue en Vercel
 
-El archivo `render.yaml` contiene la configuración del servicio. Al crear el Blueprint, Render solicitará los valores de `NASA_API_KEY`, `REDIS_URL` y `CACHE_ADMIN_TOKEN`; no deben escribirse en el repositorio.
+| Componente | URL |
+| --- | --- |
+| Backend (API) | https://crash-apirepsoftware.vercel.app |
+| Frontend | https://crashnasa.vercel.app |
+
+El backend se despliega en Vercel. Vercel detecta FastAPI por la instancia `app` de `main.py`, así que no hace falta `vercel.json`.
+
+Configura las variables de entorno en **Project Settings → Environment Variables** (no subas el archivo `.env` al repositorio ni lo adjuntes al proyecto):
+
+| Variable | Valor |
+| --- | --- |
+| `NASA_API_KEY` | Tu API key de NASA (obligatoria). |
+| `CORS_ORIGINS` | `https://crashnasa.vercel.app` |
+| `REDIS_URL` | URL pública de Redis (opcional). |
+| `CACHE_ADMIN_TOKEN` | Token para endpoints administrativos (opcional). |
+
+Guarda los cambios y pulsa **Redeploy**. En Vercel no se configura `PORT`: la función expone la aplicación directamente.
+
+El archivo `render.yaml` se conserva únicamente como referencia de una alternativa de despliegue; el despliegue activo es Vercel.
 
 ## Seguridad
 

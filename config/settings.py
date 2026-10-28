@@ -23,7 +23,13 @@ def get_port(default: int = 8000) -> int:
 NASA_API_KEY = get_env("NASA_API_KEY", "apiKey")
 PORT = get_port()
 
-_raw_origins = get_env("CORS_ORIGINS", default="*") or "*"
-CORS_ORIGINS = [origin.strip() for origin in _raw_origins.split(",") if origin.strip()]
+DEFAULT_CORS_ORIGINS = "https://crashnasa.vercel.app"
+
+_raw_origins = get_env("CORS_ORIGINS", default=DEFAULT_CORS_ORIGINS) or DEFAULT_CORS_ORIGINS
+CORS_ORIGINS = [
+    origin.strip().rstrip("/")
+    for origin in _raw_origins.split(",")
+    if origin.strip()
+]
 
 CACHE_ADMIN_TOKEN = get_env("CACHE_ADMIN_TOKEN")
