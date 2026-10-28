@@ -41,7 +41,7 @@ La documentación interactiva queda disponible en http://127.0.0.1:8000/docs.
 | --- | --- | --- |
 | `NASA_API_KEY` | Sí | API key de NASA. |
 | `PORT` | No | Puerto para ejecutar `main.py` directamente. Por defecto `8000`. |
-| `CORS_ORIGINS` | No | Orígenes permitidos separados por coma. Por defecto `*`. |
+| `CORS_ORIGINS` | No | Orígenes permitidos separados por coma. Por defecto `https://crashnasa.vercel.app`. |
 | `REDIS_URL` | No | URL completa de Redis, por ejemplo `redis://usuario:clave@host:6379/0`. |
 | `REDIS_HOST` | No | Host de Redis si no se usa `REDIS_URL`. Por defecto `localhost`. |
 | `REDIS_PORT` | No | Puerto de Redis. Por defecto `6379`. |

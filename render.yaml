@@ -11,7 +11,7 @@ services:
       - key: NASA_API_KEY
         sync: false
       - key: CORS_ORIGINS
-        value: "*"
+        value: "https://crashnasa.vercel.app"
       - key: REDIS_URL
         sync: false
       - key: CACHE_ADMIN_TOKEN
