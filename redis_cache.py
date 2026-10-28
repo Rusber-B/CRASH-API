@@ -1,9 +1,12 @@
 # redis_cache.py - Versión compatible con Render
-import os
 import json
-from typing import Any, Optional, Dict
-from collections import OrderedDict
+import logging
+import os
 import time
+from collections import OrderedDict
+from typing import Any, Dict, Optional
+
+logger = logging.getLogger(__name__)
 
 # Cache en memoria como fallback
 class MemoryCache:
@@ -49,6 +52,18 @@ class MemoryCache:
 
     def health_check(self) -> bool:
         return True
+
+    def info(self) -> Dict[str, Any]:
+        return {
+            "backend": "memory",
+            "connected_clients": 1,
+            "used_memory_human": "n/a",
+            "used_memory_peak_human": "n/a",
+            "keyspace_hits": 0,
+            "keyspace_misses": 0,
+            "keys": len(self._cache),
+            "max_size": self.max_size,
+        }
 
     @property
     def redis_client(self):
@@ -127,6 +142,9 @@ try:
                 except Exception:
                     return False
 
+            def info(self) -> dict:
+                return self.redis_client.info()
+
             def keys(self, pattern: str = "*"):
                 try:
                     return self.redis_client.keys(pattern)
@@ -134,14 +152,14 @@ try:
                     return []
         
         cache = RedisCache()
-        print("✅ Redis cache inicializado")
+        logger.info("Redis cache inicializado")
         
     else:
         # En localhost sin Redis, usar memoria
         cache = MemoryCache()
-        print("✅ Cache en memoria inicializado (localhost sin Redis)")
+        logger.info("Cache en memoria inicializado (localhost sin Redis)")
         
 except ImportError:
     # Redis no está instalado, usar memoria
     cache = MemoryCache()
-    print("✅ Cache en memoria inicializado (redis no instalado)")
+    logger.info("Cache en memoria inicializado (redis no instalado)")

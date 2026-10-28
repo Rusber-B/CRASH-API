@@ -1,4 +1,3 @@
-# render.yaml
 services:
   - type: web
     name: fastapi-asteroids
@@ -9,3 +8,11 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
+      - key: NASA_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        value: "https://crashnasa.vercel.app"
+      - key: REDIS_URL
+        sync: false
+      - key: CACHE_ADMIN_TOKEN
+        sync: false
